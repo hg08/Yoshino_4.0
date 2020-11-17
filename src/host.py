@@ -69,7 +69,6 @@ class host_network:
         #self.new_r = self.r
         self.new_r = copy.deepcopy(self.r)
 
-
         # Initialize the simulation steps
         self.count_S_update = 0           
         self.count_J_update = 0           
@@ -239,17 +238,17 @@ class host_network:
                 part_gap.append( (np.sum(self.J[term[0],n2,:] * self.new_S[term[0],term[1],:])/SQRT_N) * self.S[term[0]+1,term[1],n2] ) 
         return np.array(part_gap)  
     def part_gap_before_shift_multiple(self,active_J_index): 
-        part_gap = [] 
+        part_gap = np.zeros((self.M,len(active_J_index))) 
         for mu in range(self.M):
-            for term in active_J_index:
-                part_gap.append( (np.sum(self.J[term[0],term[1],:] * self.S[term[0],mu,:])/SQRT_N) * self.S[term[0]+1,mu,term[1]] ) 
-        return np.array(part_gap)  
+            for index,term in enumerate(active_J_index):
+                part_gap[mu][index] = (np.sum(self.J[term[0],term[1],:] * self.S[term[0],mu,:])/SQRT_N) * self.S[term[0]+1,mu,term[1]] 
+        return part_gap
     def part_gap_after_shift_multiple(self,active_J_index): 
-        part_gap = [] 
+        part_gap = np.zeros((self.M,len(active_J_index))) 
         for mu in range(self.M):
-            for term in active_J_index:
-                part_gap.append((np.sum(self.new_J[term[0],term[1],:] * self.S[term[0],mu,:])/SQRT_N) * self.S[term[0]+1,mu,term[1]]) 
-        return np.array(part_gap)  
+            for index,term in enumerate(active_J_index):
+                part_gap[mu][index] = (np.sum(self.new_J[term[0],term[1],:] * self.S[term[0],mu,:])/SQRT_N) * self.S[term[0]+1,mu,term[1]]
+        return part_gap  
     def decision_by_mu_l_n(self,MC_index,mu,l,n):
         """
         1. np.random.random(1) generate a random float number between 0 and 1.
@@ -404,18 +403,16 @@ if __name__=='__main__':
     file_o_J_seq = open(name_J_seq, 'w')
     # MC siulation starts
     if multiple_update:
-        tot_steps = int(tot_steps/(L/2))
-        for MC_index in range(1,tot_steps):
+        reduced_tot_steps = int(tot_steps/(L/2))
+        for MC_index in range(1,reduced_tot_steps):
             print("MC step:{:d}".format(MC_index))
             for update_index in range(num):
                 if np.random.random(1) < ratio_for_sites:
-                    # Flip one spin and make a decision: there are M*(L-1)*N times
-                    print("  FOR FLIPPINT S")
+                    #print("  FOR FLIPPINT S")
                     active_S_index = o.flip_multiple_S(choice([0,1]))
                     o.decision_by_mu_l_n_multiple(MC_index,active_S_index)
                 else:
-                    print("  FOR SHIFTING J")
-                    # shift one bond (interaction) and make a decision: there are L*N*N times
+                    #print("  FOR SHIFTING J")
                     active_J_index = o.shift_multiple_bond(choice([0,1])) 
                     o.decision_by_l_n2_n1_multiple(MC_index,active_J_index)
             o.count_MC_step += 1
@@ -427,14 +424,11 @@ if __name__=='__main__':
             print("MC step:{:d}".format(MC_index))
             for update_index in range(num):
                 if np.random.random(1) < ratio_for_sites:
-                    # Flip one spin and make a decision: there are M*(L-1)*N times
-                    print("  FOR FLIPPINT S")
-                    #o.flip_multiple_S(choice([0,1]))
+                    #print("  FOR FLIPPINT S")
                     o.flip_S()
                     o.decision_by_mu_l_n(MC_index,o.updating_sample_index,o.updating_layer_index, o.updating_node_index)
                 else:
-                    print("  FOR SHIFTING J")
-                    # shift one bond (interaction) and make a decision: there are L*N*N times
+                    #print("  FOR SHIFTING J")
                     o.shift_bond() 
                     o.decision_by_l_n2_n1(MC_index,o.updating_layer_index, o.updating_node_index_n2,o.updating_node_index_n1)
             o.count_MC_step += 1
@@ -447,5 +441,5 @@ if __name__=='__main__':
     np.save('{}/{}/S_L{:d}_M{:d}_N{:d}_beta{:3.1f}_step{:d}.npy'.format(data,start_timestamp,L,M,N,beta,tot_steps),o.S_traj)
     np.save('{}/{}/J_L{:d}_N{:d}_beta{:3.1f}_step{:d}.npy'.format(data,start_timestamp,L,N,beta,tot_steps),o.J_traj)
     np.save('{}/{}/ener_L{:d}_M{:d}_N{:d}_beta{:3.1f}_step{:d}.npy'.format(data,start_timestamp,L,M,N,beta,tot_steps),o.H_traj)
-    print("All Monte Carlo simulations done!")
+    print("All MC simulations done!")
     print('Time taken to run: {:5.1f} seconds.'.format(int(time())-start_time_int))

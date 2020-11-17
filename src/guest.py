@@ -437,18 +437,16 @@ if __name__=='__main__':
     file_o_J_seq = open(name_J_seq, 'w')
     # MC siulation starts
     if multiple_update:
-        tot_steps = int(tot_steps/(o.L/2))
-        for MC_index in range(1,tot_steps):
+        reduced_tot_steps = int(tot_steps/(o.L/2))
+        for MC_index in range(1,reduced_tot_steps):
             print("MC step:{:d}".format(MC_index))
             for update_index in range(num):
                 if np.random.random(1) < ratio_for_sites:
-                    # Flip one spin and make a decision: there are M*(L-1)*N times
-                    print("  FOR FLIPPINT S")
+                    #print("  FOR FLIPPINT S")
                     active_S_index = o.flip_multiple_S(choice([0,1]))
                     o.decision_by_mu_l_n_multiple(MC_index,active_S_index)
                 else:
-                    print("  FOR SHIFTING J")
-                    # shift one bond (interaction) and make a decision: there are L*N*N times
+                    #print("  FOR SHIFTING J")
                     active_J_index = o.shift_multiple_bond(choice([0,1])) 
                     o.decision_by_l_n2_n1_multiple(MC_index,active_J_index)
             o.count_MC_step += 1
@@ -460,14 +458,11 @@ if __name__=='__main__':
             print("MC step:{:d}".format(MC_index))
             for update_index in range(num):
                 if np.random.random(1) < ratio_for_sites:
-                    # Flip one spin and make a decision: there are M*(L-1)*N times
-                    print("  FOR FLIPPINT S")
-                    #o.flip_multiple_S(choice([0,1]))
+                    #print("  FOR FLIPPINT S")
                     o.flip_S()
                     o.decision_by_mu_l_n(MC_index,o.updating_sample_index,o.updating_layer_index, o.updating_node_index)
                 else:
-                    print("  FOR SHIFTING J")
-                    # shift one bond (interaction) and make a decision: there are L*N*N times
+                    #print("  FOR SHIFTING J")
                     o.shift_bond() 
                     o.decision_by_l_n2_n1(MC_index,o.updating_layer_index, o.updating_node_index_n2,o.updating_node_index_n1)
             o.count_MC_step += 1
