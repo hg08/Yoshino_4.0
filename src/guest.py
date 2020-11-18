@@ -102,6 +102,29 @@ class guest_network:
                 for n in range(self.N):
                     r[mu,l,n] = (np.sum(self.J[l,n,:] * self.S[l,mu,:])/np.sqrt(self.N)) * self.S[l+1,mu,n] 
         return r    
+    def flip_spin(self,l,mu,n):
+        '''flip_spin() will flip S at a given index tuple (l,mu,n). We add l,mu,n as parameters, for parallel programming. Note: any spin can be update except the input/output.'''
+        # record this step
+        self.new_S = copy.deepcopy(self.S)
+        #i,j,k = randrange(1,self.L), randrange(self.M), randrange(self.N)
+        # update self.new_S
+        self.new_S[l][mu][n] = -1 * self.S[l][mu][n]  
+        # record this step
+        self.count_S_update += 1          
+        ## change the active-or-not state of S 
+        self.S_active = True 
+    def shift_bond(self,l,n2,n1):
+        '''shift_bond() will shift the element of J with a given index to another value. We add l,n2,n1 as parameters, for parallel programming..'''
+        self.new_J = copy.deepcopy(self.J)
+        #i,n2,n1 = randrange(self.L),randrange(self.N),randrange(self.N)
+        x = np.random.normal(loc=0,scale=1.0,size=1) 
+        # scale denotes standard deviation; 
+        # x is a random number following the Gaussian distribution with 0 mean and variance 1. Ref: Yoshino2019
+        self.new_J[l][n2][n1] = (self.J[l][n2][n1] + x * rat) / RESCALE_J
+        # record this step
+        self.count_J_update += 1
+        # change the active-or-not state of J
+        self.J_active = True 
     def flip_S(self):
         '''flip_S() will generate a new array new_S. Note: all the spins can be update except the input/output.'''
         # record this step
@@ -122,7 +145,7 @@ class guest_network:
         # change the active-or-not state of S 
         self.S_active = True 
 
-    def shift_bond(self):
+    def shift_J(self):
         '''shift_bond() will generate a new array new_J.'''
         self.new_J = copy.deepcopy(self.J)
         i,n2,n1 = randrange(self.L),randrange(self.N),randrange(self.N)
@@ -175,19 +198,19 @@ class guest_network:
         # change the active-or-not state of J
         self.J_active = True 
         return active_J_index
-    def accept_by_mu_l_n(self,mu,l,n):
+    def accept_by_l_mu_n(self,l,mu,n):
+        """This accept function is used if S is flipped."""
         self.S[l,mu,n] = self.new_S[l,mu,n]
         #self.J = self.new_J
         self.H = self.H + self.delta_H
         print("ENERGY: {}".format(self.H))
-
     def accept_by_l_n2_n1(self,l,n2,n1):
         self.J[l,n2,n1] = self.new_J[l,n2,n1]
         #self.J = self.new_J
         self.H = self.H + self.delta_H
         print("ENERGY: {}".format(self.H))
 
-    def accept_by_mu_l_n_multiple(self,active_S_index):
+    def accept_by_l_mu_n_multiple(self,active_S_index):
         """This accept function is used if S is flipped."""
         for term in active_S_index:
             self.S[term[0],term[1],term[2]] = self.new_S[term[0],term[1],term[2]]
@@ -200,7 +223,7 @@ class guest_network:
             self.J[term[0],term[1],term[2]] = self.new_J[term[0],term[1],term[2]]
         self.H = self.H + self.delta_H
         print("ENERGY: {}".format(self.H))
-    def part_gap_before_flip(self,mu,l,n):
+    def part_gap_before_flip(self,l,mu,n):
         '''Ref: Yoshino2019, eqn (31b)
            When S is fliped, only one machine changes its coordinates and it will affect the gap of the node before it and the gaps of the N nodes
            behind it. Therefore, N+1 gaps contributes to the Delta_H_eff. l = 0,1, ..., L-1. 
@@ -212,8 +235,7 @@ class guest_network:
         for n2 in range(self.N):
             part_gap[1+n2] = (np.sum(self.J[l,n2,:] * self.S[l,mu,:])/SQRT_N) * self.S[l+1,mu,n2] 
         return part_gap  # Only the N+1 elements affect the Delta_H_eff. 
-
-    def part_gap_after_flip(self,mu,l,n):
+    def part_gap_after_flip(self,l,mu,n):
         '''Ref: Yoshino2019, eqn (31b)
            When S is fliped, only one machine changes its coordinates and it will affect the gap of the node before it and the gaps of the N nodes
            behind it. Therefore, N+1 gaps contributes to the Delta_H_eff. l = 0,1, ..., L-1. 
@@ -222,11 +244,9 @@ class guest_network:
         '''
         part_gap = np.zeros(self.N + 1)
         part_gap[0] = (np.sum( self.J[l-1,n,:] * self.S[l-1,mu,:])/SQRT_N) * self.new_S[l,mu,n] 
-        for n2 in range(self.N):
-            #self.r[mu,l,n] = np.sum(self.new_J[l,n,:] * self.new_S[l,mu,:] * self.new_S[l+1,mu,n]/np.sqrt(self.N)).sum()
+        for n2 in range( self.N):
             part_gap[1+n2] = (np.sum(self.J[l,n2,:] * self.new_S[l,mu,:])/SQRT_N) * self.S[l+1,mu,n2] 
         return part_gap  # Only the N+1 elements affect the Delta_H_eff. 
-
     def part_gap_before_shift(self,l,n): 
         '''Ref: Yoshino2019, eqn (31b)
            When J is fliped, all M machine change their coordinates and they will affect the gap of the nodes before them.
@@ -277,43 +297,24 @@ class guest_network:
             for term in active_J_index:
                 part_gap.append((np.sum(self.new_J[term[0],term[1],:] * self.S[term[0],mu,:])/SQRT_N) * self.S[term[0]+1,mu,term[1]]) 
         return np.array(part_gap)  
-    def decision_by_mu_l_n(self,MC_index,mu,l,n):
+    def decision_by_l_mu_n(self,MC_index,l,mu,n):
         """
         1. np.random.random(1) generate a random float number between 0 and 1.
         3. k_B = 1.
         """
-        self.delta_H = calc_ener(self.part_gap_after_flip(mu,l,n)) - calc_ener(self.part_gap_before_flip(mu,l,n))
+        self.delta_H = calc_ener(self.part_gap_after_flip(l,mu,n)) - calc_ener(self.part_gap_before_flip(l,mu,n))
         delta_e = self.delta_H
         #print("[S]delta_E:{}".format(delta_e)) 
         if delta_e < 0:
-            # replace o.S by o.new_S: use copy.deepcopy() 
-            self.accept_by_mu_l_n(mu,l,n) 
-            print("ACCEPT.")       
+            self.accept_by_l_mu_n(l,mu,n) 
+            print("ACC.")       
         else:
             if np.random.random(1) < np.exp(-delta_e * self.beta):
-                self.accept_by_mu_l_n(mu,l,n)
-                print("ACCEPT.")       
+                self.accept_by_l_mu_n(l,mu,n)
+                print("ACC.")       
             else:
                 pass
                 #print("REJECTED.")       
-    def decision_by_mu_l_n(self,MC_index,mu,l,n):
-        """
-        1. np.random.random(1) generate a random float number between 0 and 1.
-        3. k_B = 1.
-        """
-        self.delta_H = calc_ener(self.part_gap_after_flip(mu,l,n)) - calc_ener(self.part_gap_before_flip(mu,l,n))
-        delta_e = self.delta_H
-        if delta_e < 0:
-            # replace o.S by o.new_S: use copy.deepcopy() 
-            self.accept_by_mu_l_n(mu,l,n) 
-            print("ACCEPT.")       
-        else:
-            if np.random.random(1)< np.exp(-delta_e * self.beta):
-                self.accept_by_mu_l_n(mu,l,n)
-                print("ACCEPT.")       
-            else:
-                pass
-                #self.remain(MC_index)
     def decision_by_l_n2_n1(self,MC_index,l,n2,n1):
         """
         1. np.random.random(1) generate a random float number between 0 and 1.
@@ -332,7 +333,7 @@ class guest_network:
             else:
                 pass # We do not need remain function
                 #self.remain(MC_index)
-    def decision_by_mu_l_n_multiple(self,MC_index,active_S_index):
+    def decision_by_l_mu_n_multiple(self,MC_index,active_S_index):
         """
         1. np.random.random(1) generate a random float number between 0 and 1.
         3. k_B = 1.
@@ -341,13 +342,12 @@ class guest_network:
         delta_e = self.delta_H
         print("[S]delta_E:{}".format(delta_e)) 
         if delta_e < 0:
-            # replace o.S by o.new_S: use copy.deepcopy() 
-            self.accept_by_mu_l_n_multiple(active_S_index) 
-            print("ACCEPT.")       
+            self.accept_by_l_mu_n_multiple(active_S_index) 
+            print("ACC.")       
         else:
             if np.random.random(1) < np.exp(-delta_e * self.beta):
-                self.accept_by_mu_l_n_multiple(active_S_index)
-                print("ACCEPT.")       
+                self.accept_by_l_mu_n_multiple(active_S_index)
+                print("ACC.")       
             else:
                 pass
                 #print("REJECTED.")       
@@ -370,13 +370,6 @@ class guest_network:
             else:
                 pass
                 #print("REJECTED.")       
-    #def remain(self,MC_index):
-    #    """
-    #    Why we need remain()? A: If a move is rejected, we will think there is also a step, we also have to record the traj of S, J and H.
-    #    Note:MC_index > 0 """
-    #    self.S_traj[MC_index] = self.S_traj[MC_index-1]
-    #    self.J_traj[MC_index] = self.J_traj[MC_index-1] 
-    #    self.H_traj[MC_index] = self.H_traj[MC_index-1]
 
 # =====
 # Main
@@ -439,14 +432,16 @@ if __name__=='__main__':
     if multiple_update:
         for MC_index in range(1,tot_steps):
             print("MC step:{:d}".format(MC_index))
+            print("Updating S:")
             for update_index in range(num_variables):
-                #print("FOR FLIPPINT S")
-                o.flip_S()
-                o.decision_by_mu_l_n(MC_index,o.updating_sample_index,o.updating_layer_index, o.updating_node_index)
+                mu,l,n = randrange(o.M), randrange(1,o.L), randrange(o.N)
+                o.flip_spin(l,mu,n)
+                o.decision_by_l_mu_n(MC_index,l,mu,n)
+            print("Updating J:")
             for update_index in range(num_bonds):
-                #print("FOR SHIFTING J")
-                o.shift_bond() 
-                o.decision_by_l_n2_n1(MC_index,o.updating_layer_index, o.updating_node_index_n2,o.updating_node_index_n1)
+                l,n2,n1 = randrange(o.L),randrange(o.N),randrange(o.N)
+                o.shift_bond(l,n2,n1) 
+                o.decision_by_l_n2_n1(MC_index,l,n2,n1)
             o.count_MC_step += 1
             o.S_traj[MC_index] = o.S  #
             o.J_traj[MC_index] = o.J
@@ -454,17 +449,16 @@ if __name__=='__main__':
     else:
         for MC_index in range(1,tot_steps):
             print("MC step:{:d}".format(MC_index))
-            for update_index in range(num):
-                if np.random.random(1) < ratio_for_sites:
-                    #print("  FOR FLIPPINT S")
-                    o.flip_S()
-                    o.decision_by_mu_l_n(MC_index,o.updating_sample_index,o.updating_layer_index, o.updating_node_index)
-                else:
-                    #print("  FOR SHIFTING J")
-                    o.shift_bond() 
-                    o.decision_by_l_n2_n1(MC_index,o.updating_layer_index, o.updating_node_index_n2,o.updating_node_index_n1)
+            print("Updating S:")
+            for update_index in range(num_variables):
+                o.flip_multiple_S(choice([0,1]))
+                o.decision_by_l_mu_n_multiple(MC_index,active_S_index)
+            print("Updating J:")
+            for update_index in range(num_bonds):
+                o.shift_multiple_bond(choice([0,1])) 
+                o.decision_by_l_n2_n1_multiple(MC_index,active_J_index)
             o.count_MC_step += 1
-            o.S_traj[MC_index] = o.S  #
+            o.S_traj[MC_index] = o.S
             o.J_traj[MC_index] = o.J
             o.H_traj[MC_index] = o.H
     # MC is done, we can close some files for recording the S and J sequences.

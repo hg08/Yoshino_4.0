@@ -1,1 +1,1 @@
-python host.py -M 10 -L 10 -N 10 -S 100
+python host.py -M 200 -L 5 -N 20 -S 200
