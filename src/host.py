@@ -429,20 +429,7 @@ if __name__=='__main__':
             o.J_traj[MC_index] = o.J
             o.H_traj[MC_index] = o.H
     else:
-        for MC_index in range(1,tot_steps):
-            print("MC step:{:d}".format(MC_index))
-            print("Updating S:")
-            for update_index in range(num_variables):
-                o.flip_multiple_S(choice([0,1]))
-                o.decision_by_l_mu_n_multiple(MC_index,active_S_index)
-            print("Updating J:")
-            for update_index in range(num_bonds):
-                o.shift_multiple_bond(choice([0,1])) 
-                o.decision_by_l_n2_n1_multiple(MC_index,active_J_index)
-            o.count_MC_step += 1
-            o.S_traj[MC_index] = o.S
-            o.J_traj[MC_index] = o.J
-            o.H_traj[MC_index] = o.H
+        pass
     # MC is done, we can close some files for recording the S and J sequences.
     file_o_S_seq.close()
     file_o_J_seq.close()
