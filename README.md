@@ -20,4 +20,4 @@ the code `host.py` automatically, and they will be used in `guest.py` when one r
 
 3. Yoshino_4.0 is based on the following basic ideas:
 1) S (J) at Every other layer can be updated at the same time.
-
+2) The order of updating $J$ or $S$ is not important, therefore, in Yoshino_4.0, we remove the random choice of $J$ or $S$ before updating.

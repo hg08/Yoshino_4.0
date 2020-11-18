@@ -418,7 +418,7 @@ if __name__=='__main__':
     num_variables = int(o.N*o.M*(o.L-1))
     num_bonds = int(o.N*o.N*o.L)
     num = num_variables+num_bonds
-    ratio_for_sites = num_variables/num
+    ratio_for_sites = num_variables / num
 
     o.S_traj[0,:,:,:] = o.S # Note that self.S_traj will independent of self.S from now on.
     o.J_traj[0,:,:,:] = o.J 
@@ -437,18 +437,16 @@ if __name__=='__main__':
     file_o_J_seq = open(name_J_seq, 'w')
     # MC siulation starts
     if multiple_update:
-        reduced_tot_steps = int(tot_steps/(o.L/2))
-        for MC_index in range(1,reduced_tot_steps):
+        for MC_index in range(1,tot_steps):
             print("MC step:{:d}".format(MC_index))
-            for update_index in range(num):
-                if np.random.random(1) < ratio_for_sites:
-                    #print("  FOR FLIPPINT S")
-                    active_S_index = o.flip_multiple_S(choice([0,1]))
-                    o.decision_by_mu_l_n_multiple(MC_index,active_S_index)
-                else:
-                    #print("  FOR SHIFTING J")
-                    active_J_index = o.shift_multiple_bond(choice([0,1])) 
-                    o.decision_by_l_n2_n1_multiple(MC_index,active_J_index)
+            for update_index in range(num_variables):
+                #print("FOR FLIPPINT S")
+                o.flip_S()
+                o.decision_by_mu_l_n(MC_index,o.updating_sample_index,o.updating_layer_index, o.updating_node_index)
+            for update_index in range(num_bonds):
+                #print("FOR SHIFTING J")
+                o.shift_bond() 
+                o.decision_by_l_n2_n1(MC_index,o.updating_layer_index, o.updating_node_index_n2,o.updating_node_index_n1)
             o.count_MC_step += 1
             o.S_traj[MC_index] = o.S  #
             o.J_traj[MC_index] = o.J

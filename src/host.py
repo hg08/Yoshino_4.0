@@ -258,13 +258,12 @@ class host_network:
         delta_e = self.delta_H
         #print("[S]delta_E:{}".format(delta_e)) 
         if delta_e < 0:
-            # replace o.S by o.new_S: use copy.deepcopy() 
             self.accept_by_mu_l_n(mu,l,n) 
-            print("ACCEPT.")       
+            #print("ACCEPT.")       
         else:
             if np.random.random(1) < np.exp(-delta_e * self.beta):
                 self.accept_by_mu_l_n(mu,l,n)
-                print("ACCEPT.")       
+                print("ACC.")       
             else:
                 pass
                 #print("REJECTED.")       
@@ -277,13 +276,12 @@ class host_network:
         delta_e = self.delta_H
         #print("[J]delta_E:{}".format(delta_e)) 
         if delta_e < 0:
-            # replace o.S by o.new_S: use copy.deepcopy() 
             self.accept_by_l_n2_n1(l,n2,n1) 
-            print("ACCEPT.")       
+            #print("ACCEPT.")       
         else:
             if np.random.random(1) < np.exp(-delta_e * self.beta):
                 self.accept_by_l_n2_n1(l,n2,n1)
-                print("ACCEPT.")       
+                print("ACC.")       
             else:
                 pass
                 #print("REJECTED.")       
@@ -296,13 +294,12 @@ class host_network:
         delta_e = self.delta_H
         print("[S]delta_E:{}".format(delta_e)) 
         if delta_e < 0:
-            # replace o.S by o.new_S: use copy.deepcopy() 
             self.accept_by_mu_l_n_multiple(active_S_index) 
-            print("ACCEPT.")       
+            #print("ACC.")       
         else:
             if np.random.random(1) < np.exp(-delta_e * self.beta):
                 self.accept_by_mu_l_n_multiple(active_S_index)
-                print("ACCEPT.")       
+                print("ACC.")       
             else:
                 pass
                 #print("REJECTED.")       
@@ -313,15 +310,16 @@ class host_network:
         """
         self.delta_H = calc_ener(self.part_gap_after_shift_multiple(active_J_index)) - calc_ener(self.part_gap_before_shift_multiple(active_J_index))
         delta_e = self.delta_H
-        #print("[J]delta_E:{}".format(delta_e)) 
+        print("[J]delta_E:{}".format(delta_e)) 
         if delta_e < 0:
             # replace o.S by o.new_S: use copy.deepcopy() 
             self.accept_by_l_n2_n1_multiple(active_J_index) 
-            print("ACCEPT.")       
+            #print("ACCEPT.")       
+            #print("ACC.")       
         else:
             if np.random.random(1) < np.exp(-delta_e * self.beta):
                 self.accept_by_l_n2_n1_multiple(active_J_index)
-                print("ACCEPT.")       
+                print("A.")       
             else:
                 pass
                 #print("REJECTED.")       
@@ -373,6 +371,7 @@ if __name__=='__main__':
     num_bonds = int(o.N*o.N*o.L)
     num = num_variables+num_bonds
     ratio_for_sites = num_variables/num
+
     #=====================================
     #Important step
     #Save the seed for the guest machine
@@ -403,18 +402,14 @@ if __name__=='__main__':
     file_o_J_seq = open(name_J_seq, 'w')
     # MC siulation starts
     if multiple_update:
-        reduced_tot_steps = int(tot_steps/(L/2))
-        for MC_index in range(1,reduced_tot_steps):
+        for MC_index in range(1,tot_steps):
             print("MC step:{:d}".format(MC_index))
-            for update_index in range(num):
-                if np.random.random(1) < ratio_for_sites:
-                    #print("  FOR FLIPPINT S")
-                    active_S_index = o.flip_multiple_S(choice([0,1]))
-                    o.decision_by_mu_l_n_multiple(MC_index,active_S_index)
-                else:
-                    #print("  FOR SHIFTING J")
-                    active_J_index = o.shift_multiple_bond(choice([0,1])) 
-                    o.decision_by_l_n2_n1_multiple(MC_index,active_J_index)
+            for update_index in range(num_variables):
+                o.flip_S()
+                o.decision_by_mu_l_n(MC_index,o.updating_sample_index,o.updating_layer_index, o.updating_node_index)
+            for update_index in range(num_bonds):
+                o.shift_bond() 
+                o.decision_by_l_n2_n1(MC_index,o.updating_layer_index, o.updating_node_index_n2,o.updating_node_index_n1)
             o.count_MC_step += 1
             o.S_traj[MC_index] = o.S  #
             o.J_traj[MC_index] = o.J
