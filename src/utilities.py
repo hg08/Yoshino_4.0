@@ -22,22 +22,28 @@ def generate_rand_normal_numbers(N=4):
 def init_J(L,N):
     """This function normalize the generated array J[i,j,:] to sqrt(tmp), and
      then make sure the constraint J[i,j,:]*J[i,j,:]=N are satisfied exactly."""
-    J = np.ones((L,N,N)) # axis=1 labels the backward-nodes (标记后一层结点), while axis=2 labels the forward-nodes (标记前一层结点)
-    for i in range(L):
+    J = np.zeros((L,N,N)) # axis=1 labels the backward-nodes (标记后一层结点), while axis=2 labels the forward-nodes (标记前一层结点)
+    # Set the first layer J_{0,x}^{y} = 0 (x, y are any index.)
+    for i in range(1,L):
         for j in range(N):         
             #First, generate N random numbers
             J[i,j,:] = generate_rand_normal_numbers(N)
             # Add the constraint np.sum(J[i,j,:] * J[i,j,:]) = N.
             tmp = np.sum(J[i,j,:] * J[i,j,:])
             J[i,j,:] = (J[i,j,:]/np.sqrt(tmp)) * np.sqrt(N) 
-            #TEST:
-            # print(np.sum(J[i,j,:] * J[i,j,:]))
     return J 
-def init_S(L,M,N):
-    S = np.ones((L,M,N))
-    for i in range(L):
-        for j in range(M):
-            S[i,j,:] = generate_coord(N)
+#def init_S(L,M,N):
+#    S = np.ones((L,M,N))
+#    for i in range(L):
+#        for j in range(M):
+#            S[i,j,:] = generate_coord(N)
+#    print("[For testing the validation of S] Ratio of positive S and negative S: {:7.6f}".format(S[S<0].size / S[S>0].size))
+#    return S
+def init_S(M,L,N):
+    S = np.ones((M,L,N))
+    for mu in range(M):
+        for l in range(L):
+            S[mu,l,:] = generate_coord(N)
     print("[For testing the validation of S] Ratio of positive S and negative S: {:7.6f}".format(S[S<0].size / S[S>0].size))
     return S
 def generate_coord(N):

@@ -38,7 +38,7 @@ def plot_ener_dynamics(L,M,N,beta,timestamp):
     ener2 = np.load('{}/{}/ener_guest_L{:d}_M{:d}_N{:d}_beta{:3.1f}_step{:d}.npy'.format(data,timestamp,L,M,N,beta,tot_steps))
     fig = plt.figure()
     plt.xscale('log')
-    plt.yscale('log')
+    #plt.yscale('log')
     ax = fig.add_subplot(111) # add_subplot() adds an axes to a figure, it returns a (subclass of a) matplotlib.axes.Axes object.
     ax.plot(ener[1:],"r-",label="a")
     ax.plot(ener2[1:],"b-",label='b')
