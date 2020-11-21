@@ -156,14 +156,14 @@ class guest_network:
     def decision_by_mu_l_n(self,MC_index,mu,l,n):
         self.delta_H = calc_ener(self.part_gap_after_flip(mu,l,n)) - calc_ener(self.part_gap_before_flip(mu,l,n))
         delta_e = self.delta_H
-        print("[S] delta_E:{}".format(delta_e)) 
+        #print("[S] delta_E:{}".format(delta_e)) 
         if delta_e < 0:
             self.accept_by_mu_l_n(mu,l,n) 
-            print("ACC.")       
+            print("ACC. S")       
         else:
             if np.random.random(1) < np.exp(-delta_e * self.beta):
                 self.accept_by_mu_l_n(mu,l,n)
-                print("ACC.")       
+                print("ACC. S")       
             else:
                 pass
     def decision_by_l_n2_n1(self,MC_index,l,n2,n1):
