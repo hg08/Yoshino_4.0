@@ -53,7 +53,7 @@ if __name__ == '__main__':
     mpl.use('Agg')
     data_dir = '../data1'
     timestamp_list = list_only_naked_dir(data_dir)
-    nk = 1 
+    nk = 24 
     for i in range(nk):
         para_list = np.load('{}/{}/para_list_basic.npy'.format(data_dir,timestamp_list[i]))
         beta_tmp = np.load('{}/{}/para_list_beta.npy'.format(data_dir,timestamp_list[i]))

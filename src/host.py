@@ -2,23 +2,20 @@
 #Module
 #======
 import os
+from time import time
 import multiprocessing as mp
 from scipy.stats import norm
 import numpy as np
 import scipy as sp
-import matplotlib.pyplot as plt
 import math
+import matplotlib.pyplot as plt
 from random import randrange
 from random import choice
 import copy
 from utilities import *
-from time import time
 
-#=========
-#The Class
-#=========
 class host_network:
-    def __init__(self,N,M,L,tot_steps,beta,timestamp):
+    def __init__(self,L,M,N,tot_steps,beta,timestamp):
         """Since Yoshino_3.0, when we update the energy, we do not calculate all the gaps, but only calculate these affected by the flip of a SPIN (S)  or a shift of 
            a BOND (J). This will accelerate the calculation by hundreds of times. (2) Besides, we also have to note that we do NOT need to define a functon: remain(), which records
            the new MC steps' S, J and H, even though one MC move is rejected."""
@@ -44,6 +41,23 @@ class host_network:
         # Energy difference caused by update of variables J or S 
         self.delta_H= 0 
 
+        # For recording which kind of coordinate is activated
+        self.S_active = False 
+        self.J_active = False 
+        #Intialize S and J by the array S and J. 
+        #Note: Both S and J are the coordinates of a machine.
+        self.S = init_S(self.M, self.L, self.N) # L layers
+        self.J = init_J(self.L, self.N) # L layers 
+        self.r = self.gap_init() # the initial gap is returned from a function.
+        self.new_S = copy.deepcopy(self.S) # for storing temperay array when update 
+        self.new_J = copy.deepcopy(self.J) # for storing temperay array when update  
+        self.new_r = copy.deepcopy(self.r)
+
+        # Initialize the simulation steps
+        self.count_S_update = 0           
+        self.count_J_update = 0           
+        self.count_MC_step = 0           
+
         # For recording which layer is updating
         self.updating_layer_index = None 
         # For recording which node is updating for S
@@ -54,25 +68,6 @@ class host_network:
         self.updating_node_index_n2 = None 
         # For recording which sample is updating
         self.updating_sample_index = None
-
-        # For recording which kind of coordinate is activated
-        self.S_active = False 
-        self.J_active = False 
-        #Intialize S and J by the array S and J. 
-        #Note: Both S and J are the coordinates of a machine.
-        self.S = init_S(self.M, self.L, self.N) # L layers
-        self.J = init_J(self.L, self.N) # L layers 
-        self.new_S = copy.deepcopy(self.S) # for storing temperay array when update 
-        self.new_J = copy.deepcopy(self.J) # for storing temperay array when update  
-        self.r = self.gap_init() # the initial gap is returned from a function.
-
-        #self.new_r = self.r
-        self.new_r = copy.deepcopy(self.r)
-
-        # Initialize the simulation steps
-        self.count_S_update = 0           
-        self.count_J_update = 0           
-        self.count_MC_step = 0           
 
     def gap_init(self):
         '''Ref: Yoshino2019, eqn (31b)'''
@@ -85,8 +80,8 @@ class host_network:
     def flip_spin(self,mu,l,n):
         '''flip_spin() will flip S at a given index tuple (l,mu,n). We add l,mu,n as parameters, for parallel programming. Note: any spin can be update except the input/output.'''
         # record this step
-        self.new_S = copy.deepcopy(self.S)
         # update self.new_S
+        self.new_S = copy.deepcopy(self.S)
         self.new_S[mu][l][n] = -1 * self.S[mu][l][n]  
         # change the active-or-not state of S 
         self.S_active = True 
@@ -97,42 +92,6 @@ class host_network:
         # scale denotes standard deviation; 
         # x is a random number following the Gaussian distribution with 0 mean and variance 1. Ref: Yoshino2019
         self.new_J[l][n2][n1] = (self.J[l][n2][n1] + x * rat) / RESCALE_J
-        # change the active-or-not state of J
-        self.J_active = True 
-    def flip_S(self):
-        '''flip_S() will generate a new array new_S. Note: all the spins can be update except the input/output.'''
-        # record this step
-        self.new_S = copy.deepcopy(self.S)
-        #self.new_S = self.S 
-        mu,l,k = randrange(self.M),randrange(1,self.L-1), randrange(self.N)
-        # update self.new_S
-        self.new_S[mu][l][k] = -1 * self.S[mu][l][k]  
-        # record this step
-        self.count_S_update += 1          
-        # record the label of the updating sample mu =j (S)
-        self.updating_sample_index = mu 
-        # record the label of the updating layer (S)
-        self.updating_layer_index = l
-        # record the label of the updating node (S)
-        self.updating_node_index = k 
-        # change the active-or-not state of S 
-        self.S_active = True 
-    def shift_J(self):
-        '''shift_bond() will generate a new array new_J.'''
-        self.new_J = copy.deepcopy(self.J)
-        i,n2,n1 = randrange(self.L),randrange(self.N),randrange(self.N)
-        x = np.random.normal(loc=0,scale=1.0,size=1) 
-        # scale denotes standard deviation; 
-        # x is a random number following the Gaussian distribution with 0 mean and variance 1. Ref: Yoshino2019
-        self.new_J[i][n2][n1] = (self.J[i][n2][n1] + x * rat) / RESCALE_J
-        # record this step
-        self.count_J_update += 1
-        # record the label of the updating layer (J) 
-        self.updating_layer_index = i 
-        # record the label of the updating node 1 of a link (J)
-        self.updating_node_index_n2 = n2 
-        # record the label of the updating node 2 of a link (J)
-        self.updating_node_index_n1 = n1
         # change the active-or-not state of J
         self.J_active = True 
     def accept_by_mu_l_n(self,mu,l,n):
@@ -174,13 +133,9 @@ class host_network:
             part_gap[mu] = (np.sum(self.new_J[l,n,:] * self.S[mu,l-1,:])/SQRT_N) * self.S[mu,l,n] 
         return part_gap # Only the M elements affect the Delta_H_eff. 
     def decision_by_mu_l_n(self,MC_index,mu,l,n):
-        """
-        1. np.random.random(1) generate a random float number between 0 and 1.
-        3. k_B = 1.
-        """
         self.delta_H = calc_ener(self.part_gap_after_flip(mu,l,n)) - calc_ener(self.part_gap_before_flip(mu,l,n))
         delta_e = self.delta_H
-        #print("[S]delta_E:{}".format(delta_e)) 
+        print("[S] delta_E:{}".format(delta_e)) 
         if delta_e < 0:
             self.accept_by_mu_l_n(mu,l,n) 
             print("ACC.")       
@@ -190,15 +145,10 @@ class host_network:
                 print("ACC.")       
             else:
                 pass
-                #print("REJECTED.")       
     def decision_by_l_n2_n1(self,MC_index,l,n2,n1):
-        """
-        1. np.random.random(1) generate a random float number between 0 and 1.
-        3. k_B = 1.
-        """
         self.delta_H = calc_ener(self.part_gap_after_shift(l,n2)) - calc_ener(self.part_gap_before_shift(l,n2))
         delta_e = self.delta_H
-        #print("[J]delta_E:{}".format(delta_e)) 
+        print("[J] delta_E:{}".format(delta_e)) 
         if delta_e < 0:
             self.accept_by_l_n2_n1(l,n2,n1) 
             print("ACCEPT.")       
@@ -208,56 +158,16 @@ class host_network:
                 print("ACCEPT.")       
             else:
                 pass
-                #print("REJECTED.")       
-    #def decision_by_mu_l_n_multiple(self,MC_index,active_S_index):
-    #    """
-    #    1. np.random.random(1) generate a random float number between 0 and 1.
-    #    3. k_B = 1.
-    #    """
-    #    self.delta_H = calc_ener(self.part_gap_after_flip_multiple(active_S_index)) - calc_ener(self.part_gap_before_flip_multiple(active_S_index))
-    #    delta_e = self.delta_H
-    #    print("[S]delta_E:{}".format(delta_e)) 
-    #    if delta_e < 0:
-    #        self.accept_by_mu_l_n_multiple(active_S_index) 
-    #        #print("ACC.")       
-    #    else:
-    #        if np.random.random(1) < np.exp(-delta_e * self.beta):
-    #            self.accept_by_mu_l_n_multiple(active_S_index)
-    #            print("ACC.")       
-    #        else:
-    #            pass
-    #            #print("REJECTED.")       
-    #def decision_by_l_n2_n1_multiple(self,MC_index,active_J_index):
-    #    """
-    #    1. np.random.random(1) generate a random float number between 0 and 1.
-    #    3. k_B = 1.
-    #    """
-    #    self.delta_H = calc_ener(self.part_gap_after_shift_multiple(active_J_index)) - calc_ener(self.part_gap_before_shift_multiple(active_J_index))
-    #    delta_e = self.delta_H
-    #    print("[J]delta_E:{}".format(delta_e)) 
-    #    if delta_e < 0:
-    #        # replace o.S by o.new_S: use copy.deepcopy() 
-    #        self.accept_by_l_n2_n1_multiple(active_J_index) 
-    #        #print("ACCEPT.")       
-    #    else:
-    #        if np.random.random(1) < np.exp(-delta_e * self.beta):
-    #            self.accept_by_l_n2_n1_multiple(active_J_index)
-    #            print("A.")       
-    #        else:
-    #            pass
-    #            #print("REJECTED.")       
     def update_spin(self,ind): 
         self.flip_spin(ind[0],ind[1],ind[2])
         self.decision_by_mu_l_n(MC_index,ind[0],ind[1],ind[2])
 
 if __name__=='__main__':
     #Parameters for rescaling J
-    rat = 0.1 # r:Yoshino2019 Eq(35)
+    rat = 0.1 # r: Yoshino2019 Eq(35)
     RESCALE_J = np.sqrt(1+rat**2)
-    #If the update multiple S or J? 
     multiple_update = True 
     num_cpu = os.cpu_count()
-    # Initialization
     MC_index = 0
 
     #=================================================================================
@@ -270,7 +180,6 @@ if __name__=='__main__':
     print("starting time:{}".format(start_time_int))
     # Read the arguments
     import argparse
-    #extra_index = 1 # A parameter used for helping plotting figures in log scale
     parser = argparse.ArgumentParser()
     parser.add_argument('-M', nargs='?', const=8, type=int, default=8, \
                         help="the number of samples.")
@@ -290,14 +199,13 @@ if __name__=='__main__':
     parameter_list_beta = np.array([beta])
 
     # Initilize an instance of network.
-    o = host_network(N,M,L,tot_steps,beta,start_timestamp)
+    o = host_network(L,M,N,tot_steps,beta,start_timestamp)
     # define some parameters
     SQRT_N = np.sqrt(o.N)
     num_nodes = int(o.N*o.M*o.L)
-    num_variables = int(o.N*o.M*(o.L-1))
-    num_bonds = int(o.N*o.N*o.L)
+    num_variables = int(o.N*o.M*(o.L-2))
+    num_bonds = int(o.N*o.N*(o.L-1))
     num = num_variables+num_bonds
-    #ratio_for_sites = num_variables/num
 
     #=====================================
     #Important step
@@ -319,7 +227,6 @@ if __name__=='__main__':
     o.J_traj[0,:,:,:] = o.J 
     o.H = calc_ener(o.r) # the energy
     o.H_traj[0] = o.H # H_traj[0] is the initial value of H
-    print("ENERGY (first step):{}".format(o.H_traj[1]))
 
     # MC 
     # For save J and S sequences
@@ -359,8 +266,11 @@ if __name__=='__main__':
     # MC is done, we can close some files for recording the S and J sequences.
     file_o_S_seq.close()
     file_o_J_seq.close()
+
     np.save('{}/{}/S_L{:d}_M{:d}_N{:d}_beta{:3.1f}_step{:d}.npy'.format(data,start_timestamp,L,M,N,beta,tot_steps),o.S_traj)
     np.save('{}/{}/J_L{:d}_N{:d}_beta{:3.1f}_step{:d}.npy'.format(data,start_timestamp,L,N,beta,tot_steps),o.J_traj)
     np.save('{}/{}/ener_L{:d}_M{:d}_N{:d}_beta{:3.1f}_step{:d}.npy'.format(data,start_timestamp,L,M,N,beta,tot_steps),o.H_traj)
+    
+    # Finished
     print("All MC simulations done!")
     print('Time taken to run: {:5.1f} seconds.'.format(int(time())-start_time_int))

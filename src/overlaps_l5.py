@@ -61,6 +61,7 @@ def plot_overlap_J(overlap_J,L,N,beta,tot_steps):
     plt.ylabel(r"$Q(t,l)$")
     ax.set_title("L={:d}; N={:d}; beta={:3.1f}".format(L,N,beta))
     plt.savefig("../imag/Overlap_J_L{:d}_N{:d}_beta{:3.1f}_step{:d}.eps".format(L,N,beta,tot_steps),format='eps')
+    plt.savefig("../imag/Overlap_J_L{:d}_N{:d}_beta{:3.1f}_step{:d}.png".format(L,N,beta,tot_steps),format='png')
 
 def plot_overlap_S(overlap_S,L,M,N,beta,tot_steps):
     ex = 0
@@ -127,7 +128,7 @@ def overlap_SS0(SS0_traj):
     return res
 
 if __name__ == '__main__':
-    nk = 1 # Before running, please set the number of samples by hand
+    nk = 24 # Before running, please set the number of samples by hand
     import argparse
     mpl.use('Agg')
     ext_index = 0 

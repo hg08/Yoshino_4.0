@@ -136,7 +136,7 @@ def overlap_SS0(SS0_traj):
     return res
 
 if __name__ == '__main__':
-    nk = 1 # Before running, please set the number of samples by hand
+    nk = 24 # Before running, please set the number of samples by hand
     import argparse
     mpl.use('Agg')
     ext_index = 0 
