@@ -16,8 +16,8 @@ from utilities import *
 
 class host_network:
     def __init__(self,L,M,N,tot_steps,beta,timestamp):
-        """Since Yoshino_3.0, when we update the energy, we do not calculate all the gaps, but only calculate these affected by the flip of a SPIN (S)  or a shift of 
-           a BOND (J). This will accelerate the calculation by hundreds of times. (2) Besides, we also have to note that we do NOT need to define a functon: remain(), which records
+        """Since Yoshino_3.0, when update the energy, we do not calculate energy for all the gaps, but only calculate these part affected by the flipping of a SPIN (S)  or shifting of 
+           a BOND (J). This will accelerate the calculation by hundreds of times. (2) Besides, we note that we do NOT need to define a functon: remain(), which records
            the new MC steps' S, J and H, even though one MC move is rejected."""
         # the parameters used in the host machine
         self.L = int(L) # number of layers
@@ -28,12 +28,12 @@ class host_network:
         self.beta = beta # inverse temperature
         
         # Define new parameters: T (technically required)
-        self.T = self.tot_steps+1  # we keep the initial state in the first step 
+        T = self.tot_steps+1  # we keep the initial state in the first step 
 
         # The arrays for storing MC trajectories of S, J and H
-        self.J_traj = np.zeros((self.T, self.L, self.N, self.N)) 
-        self.S_traj = np.zeros((self.T, self.M, self.L, self.N))
-        self.H_traj = np.zeros(self.T)
+        self.J_traj = np.zeros((T, self.L, self.N, self.N)) 
+        self.S_traj = np.zeros((T, self.M, self.L, self.N))
+        self.H_traj = np.zeros(T)
         
         self.H = 0 # for storing energy when update
         self.new_H = 0 # for storing temperay energy when update
@@ -49,13 +49,11 @@ class host_network:
         self.S = init_S(self.M, self.L, self.N) # L layers
         self.J = init_J(self.L, self.N) # L layers 
         self.r = self.gap_init() # the initial gap is returned from a function.
+
         self.new_S = copy.deepcopy(self.S) # for storing temperay array when update 
         self.new_J = copy.deepcopy(self.J) # for storing temperay array when update  
         self.new_r = copy.deepcopy(self.r)
 
-        # Initialize the simulation steps
-        self.count_S_update = 0           
-        self.count_J_update = 0           
         self.count_MC_step = 0           
 
         # For recording which layer is updating
