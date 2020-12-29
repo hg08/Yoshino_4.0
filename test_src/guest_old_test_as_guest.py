@@ -1,27 +1,26 @@
 #======
 #Module
 #======
-from scipy.stats import norm
-import numpy as np
-import scipy as sp
-import matplotlib.pyplot as plt
-import math
-from random import randrange
 import copy
-from utilities_old import *
+import math
+import matplotlib.pyplot as plt
+import numpy as np
+from random import randrange
+import scipy as sp
+from scipy.stats import norm
 from time import time
-#import shutil # for moving files
+from utilities_old import *
 
 class guest_network:
     def __init__(self,timestamp):
-        #=====================================================================================
+        #============================================================================
         # S and J are the coordinates of the machine.
-        # This is a guest machine 2. Similar to guest machine 1, the intial configurations are 
-        # also from the host machine. 
+        # This is a guest machine in Yoshino_4.0. The intial configurations are from 
+        # the generator machine. 
         # In host machine, we intialized the S and J in the following way:
         # S = init_S()
         # J = init_J()
-        #-------------------------------------------------------------------------------------
+        #============================================================================
         # The argument timestamp come from outside of the function.
         # The reason we need timestamp: the initial configurations of S and J in all machines, 
         # including host and guest machines are assumed to be the same. 
@@ -52,8 +51,10 @@ class guest_network:
         self.S_traj = np.zeros((self.T, self.M,self.L, self.N))
         self.J_traj = np.zeros((self.T, self.L, self.N, self.N))
         self.H_traj = np.zeros(self.T)
-        # For recording which layer is updating
-        self.updating_layer = 0 
+
+        self.H = 0
+        self.new_H = 0 # for storing temperay energy when update
+
         # For recording which kind of coordinate is activated
         self.S_active = False 
         self.J_active = False 
@@ -63,54 +64,30 @@ class guest_network:
         self.J = np.load('../data/{:s}/seed_J_L{:d}_N{:d}_beta{:3.1f}.npy'.format(timestamp,L,N,beta))
         self.new_S = copy.deepcopy(self.S) # for storing temperay array when update 
         self.new_J = copy.deepcopy(self.J) # for storing temperay array when update  
+        self.r = self.gap_init() # the initial gap
 
         # index_for_* is used for defining the location to update in the DNN. 
         # Note that the random series for guest machine 1 and guest machine 2 should be different
         self.index_for_S = np.load('../data/{:s}/index_for_S_guest_L{:d}_M{:d}_N{:d}.npy'.format(timestamp,L,M,N))
         self.index_for_J = np.load('../data/{:s}/index_for_J_guest_L{:d}_N{:d}.npy'.format(timestamp,L,N))
+
         self.series_for_x = np.load('../data/{:s}/series_for_x_guest_L{:d}_N{:d}.npy'.format(timestamp,L,N))
+
         self.series_for_decision_on_S = np.load('../data/{:s}/series_for_decision_on_S_guest_L{:d}_N{:d}.npy'.format(timestamp,L,N))  # NOTICE: *_S_guest_*
         self.series_for_decision_on_J = np.load('../data/{:s}/series_for_decision_on_J_guest_L{:d}_N{:d}.npy'.format(timestamp,L,N))  # NOTICE: *_J_guest_* 
 
-        self.r = self.gap_init() # the initial gap
-        self.H = 0
-        self.new_H = 0 # for storing temperay energy when update
+        # Initialize the inner parameters: num_bonds, num_variables, num_nodes
+        self.num_nodes = 0
+        self.num_variables = 0
+        self.num_bonds = 0
+        self.num = 0
         
         # Initialize the simulation steps
-        self.count_S_update = 0           
-        self.count_J_update = 0           
         self.count_MC_step = 0           
-
-    def flip_S(self,mu,l,n):
-        '''flip_S() will generate a new array new_S. Note: all the spins can be update except the input/output.'''
-        # record this step
-        self.new_S = copy.deepcopy(self.S)
-        # update self.new_S
-        self.new_S[mu][l][n] = -1 * self.new_S[mu][l][n]  
-        # record the label of the updating layer (S)
-        self.updating_layer = l 
-        # change the active-or-not state of S 
-        self.S_active = True 
-    def shift_bond(self,l,n2,n1,x):
-        '''shift_bond() will generate a new array new_J.'''
-        self.new_J = copy.deepcopy(self.J)
-        #x = np.random.normal(loc=0,scale=1.0,size=None) 
-        # scale denotes standard deviation; 
-        # x is a random number following the Gaussian distribution with 0 mean and variance 1. Ref: Yoshino2019
-        self.new_J[l][n2][n1] = (self.J[l][n2][n1] + x * rat) / RESCALE_J
-        # record the label of the updating layer (J) 
-        self.updating_layer = l 
-        # change the active-or-not state of J
-        self.J_active = True 
-    def accept(self):
-        self.S = copy.deepcopy(self.new_S)
-        self.J = copy.deepcopy(self.new_J)
-        self.H = copy.deepcopy(self.new_H) 
-        print("ENERGY:{}".format(self.H))
 
     def gap_init(self):
         '''Ref: Yoshino2019, eqn (31b)'''
-        r = np.ones((self.M,self.L+1,self.N))
+        r = np.ones((self.M,self.L,self.N))
         for mu in range(self.M):
             for l in range(1,self.L): # l = 0,...,L-1
                 for n in range(self.N):
@@ -122,27 +99,68 @@ class guest_network:
             for l in range(1,self.L):
                 for n in range(self.N):
                     self.r[mu,l,n] = (np.sum(self.new_J[l,n,:] * self.new_S[mu,l-1,:])/np.sqrt(self.N)) * self.new_S[mu,l,n] 
+    def ener_after_flip(self):
+        temp_r = np.ones((self.M,self.L,self.N))
+        for mu in range(self.M):
+            for l in range(1,self.L):
+                for n in range(self.N):
+                    temp_r[mu,l,n] = (np.sum(self.J[l,n,:] * self.new_S[mu,l-1,:])/np.sqrt(self.N)) * self.new_S[mu,l,n]
+        ener = calc_ener(temp_r) 
+        return ener 
+    def ener_after_shift(self):
+        temp_r = np.ones((self.M,self.L,self.N))
+        for mu in range(self.M):
+            for l in range(1,self.L):
+                for n in range(self.N):
+                    temp_r[mu,l,n] = (np.sum(self.new_J[l,n,:] * self.S[mu,l-1,:])/np.sqrt(self.N)) * self.S[mu,l,n]
+        ener = calc_ener(temp_r) 
+        return ener 
+    def flip_spin(self,mu,l,n):
+        '''flip_spin() will generate a new array new_S. Note: all the spins can be update except the input/output.'''
+        # update self.new_S
+        self.new_S = copy.deepcopy(self.S)
+        self.new_S[mu][l][n] = -1 * self.new_S[mu][l][n]  
+     
+    def shift_bond(self,l,n2,n1,x):
+        '''shift_bond() will generate a new array new_J.'''
+        self.new_J = copy.deepcopy(self.J)
+        # scale denotes standard deviation; 
+        # x is a random number following the Gaussian distribution with 0 mean and variance 1. Ref: Yoshino2019
+        self.new_J[l][n2][n1] = (self.J[l][n2][n1] + x * rat) / RESCALE_J
+    def accept(self):
+        if self.S_active == True:
+            self.S = copy.deepcopy(self.new_S)
+        else:
+            self.J = copy.deepcopy(self.new_J)
+        self.H = copy.deepcopy(self.new_H) 
+        #print("ENERGY:{}".format(self.H))
+
     def decision(self,MC_index,rand):
         """
         1. np.random.random(1) generate a random float number between 0 and 1.
         2. accept probability=min(1, exp(-\beta \Delta_E))
         3. k_B = 1.
         """
-        #r = self.gap()
-        self.gap()
-        self.new_H = calc_ener(self.r)
-        delta_e = self.new_H - self.H
+        if self.S_active == True:
+            #self.gap() # update self.r
+            self.new_H = o.ener_after_flip()
+        else:
+            #self.gap() # update self.r
+            self.new_H = o.ener_after_shift()
+        delta_e = round(self.new_H - self.H, 10)
+        #delta_e = self.new_H - self.H
         if delta_e < 0:
             # replace o.S by o.new_S: use copy.deepcopy() 
             self.accept() 
             #print("ACCEPTED.")
+            print("Delta E:{:12.10f}".format(delta_e))
         else:
-            #if np.random.random(1)< np.exp(-delta_e * self.beta):
             if rand < np.exp(-delta_e * self.beta):
                 self.accept()       
+                print("Delta E:{:12.10f}".format(delta_e))
                 #print("ACCEPTED.")
             else:
-                pass
+                print("Delta E:{:12.10f}".format(delta_e))
 # =====
 # Main
 # =====
@@ -175,18 +193,18 @@ if __name__=='__main__':
     # Initilize an instance of network.
     o = guest_network(timestamp)
     # define some parameters
-    num_nodes = int(o.N*o.M*o.L)
-    num_variables = int(o.N*o.M*(o.L-1))
-    num_bonds = int(o.N*o.N*o.L)
-    num = num_variables+num_bonds
+    o.num_nodes = int(o.N*o.M*o.L)
+    o.num_variables = int(o.N*o.M*(o.L-2))
+    o.num_bonds = int(o.N*o.N*(o.L-1))
+    o.num = o.num_variables + o.num_bonds
 
     o.S_traj[0,:,:,:] = o.S # Note that self.S_traj will independent of self.S from now on.
     o.J_traj[0,:,:,:] = o.J 
     o.H = calc_ener(o.r) # the energy
     o.H_traj[1] = o.H # H_traj[0] will be neglected
-    print("ENergy: first step:")
-    print(o.H)
-    print(o.H_traj[1])
+    #print("ENergy: first step:")
+    #print(o.H)
+    #print(o.H_traj[1])
     tot_steps = o.tot_steps
 
     # MC 
@@ -198,14 +216,18 @@ if __name__=='__main__':
 
     for MC_index in range(1,tot_steps):
         print("MC step:{:d}".format(MC_index))
-        for update_index in range((MC_index-1)*num_variables, MC_index*num_variables):
+        o.S_active = True 
+        o.J_active = False 
+        for update_index in range((MC_index-1)*o.num_variables, MC_index*o.num_variables):
             # Flip one spin and make a decision: there are M*(L-1)*N times
             m,l,n = o.index_for_S[update_index][0],o.index_for_S[update_index][1],o.index_for_S[update_index][2]
-            o.flip_S(m,l,n)
+            o.flip_spin(m,l,n)
             o.decision(MC_index,o.series_for_decision_on_S[update_index])
             #print("  FOR FLIPPINT S")
 
-        for update_index in range((MC_index-1)*num_bonds, MC_index*num_bonds):
+        o.S_active = False 
+        o.J_active = True 
+        for update_index in range((MC_index-1)*o.num_bonds, MC_index*o.num_bonds):
             # shift one bond (interaction) and make a decision: there are L*N*N times
             l,n2,n1,x = o.index_for_J[update_index][0],o.index_for_J[update_index][1],o.index_for_J[update_index][2],o.series_for_x[update_index]
             o.shift_bond(l,n2,n1,x)

@@ -74,6 +74,12 @@ class guest_network:
         self.series_for_decision_on_S = np.load('../data/{:s}/series_for_decision_on_S_guest_L{:d}_N{:d}.npy'.format(timestamp,L,N)) # NOTICE: *_J_guest_* 
         self.series_for_decision_on_J = np.load('../data/{:s}/series_for_decision_on_J_guest_L{:d}_N{:d}.npy'.format(timestamp,L,N)) # NOTICE: *_J_guest_*
 
+        # Initialize the inner parameters: num_bonds, num_variables, num_nodes
+        self.num_nodes = 0
+        self.num_variables = 0
+        self.num_bonds = 0
+        self.num = 0
+
         self.count_MC_step = 0           
 
         # For recording which layer is updating
@@ -146,24 +152,30 @@ class guest_network:
         delta_e = self.delta_H
         if delta_e < 0:
             self.accept_by_mu_l_n(mu,l,n) 
+            print("Delta E:{:12.10f}".format(delta_e))
         else:
             #if np.random.random(1) < np.exp(-delta_e * self.beta):
             if rand < np.exp(-delta_e * self.beta):
                 self.accept_by_mu_l_n(mu,l,n)
+                print("Delta E:{:12.10f}".format(delta_e))
             else:
-                pass
+                print("Delta E:{:12.10f}".format(delta_e))
+                #pass
     def decision_by_l_n2_n1(self,MC_index,l,n2,n1,rand):
         self.delta_H = calc_ener(self.part_gap_after_shift(l,n2)) - calc_ener(self.part_gap_before_shift(l,n2))
         delta_e = self.delta_H
         if delta_e < 0:
             # replace o.S by o.new_S:
             self.accept_by_l_n2_n1(l,n2,n1) 
+            print("[J] Delta E:{:12.10f}".format(delta_e))
         else:
             #if np.random.random(1) < np.exp(-delta_e * self.beta):
             if rand < np.exp(-delta_e * self.beta):
                 self.accept_by_l_n2_n1(l,n2,n1)
+                print("[J] Delta E:{:12.10f}".format(delta_e))
             else:
-                pass # We do not need a "remain" function
+                print("[J] Delta E:{:12.10f}".format(delta_e))
+                #pass # We do not need a "remain" function
 
 if __name__=='__main__':
     #Parameters for rescaling J
@@ -198,11 +210,16 @@ if __name__=='__main__':
     o = guest_network(timestamp)
     # define some parameters
     SQRT_N = np.sqrt(o.N)
-    num_nodes = int(o.N*o.M*o.L)
-    num_variables = int(o.N*o.M*(o.L-2))
-    num_bonds = int(o.N*o.N*(o.L-1))
-    num = num_variables+num_bonds
-    ratio_for_sites = num_variables / num
+    o.num_nodes = int(o.N*o.M*o.L)
+    o.num_variables = int(o.N*o.M*(o.L-2))
+    o.num_bonds = int(o.N*o.N*(o.L-1))
+    o.num = o.num_variables + o.num_bonds
+    ratio_for_sites = o.num_variables / o.num
+   
+    num_nodes = o.num_nodes
+    num_variables = o.num_variables
+    num_bonds = o.num_bonds
+    num = o.num
 
     o.S_traj[0,:,:,:] = o.S # Note that self.S_traj will independent of self.S from now on.
     o.J_traj[0,:,:,:] = o.J 
@@ -229,7 +246,7 @@ if __name__=='__main__':
                 o.flip_spin(mu,l,n)
                 o.decision_by_mu_l_n(MC_index,mu,l,n,o.series_for_decision_on_S[update_index])
             #print("Updating J:")
-            print("ENERGY: {}".format(o.H))
+            #print("ENERGY: {}".format(o.H))
             for update_index in range((MC_index-1)*num_bonds, MC_index*num_bonds):
                 #l,n2,n1 = randrange(1,o.L),randrange(o.N),randrange(o.N)
                 l,n2,n1,x = o.index_for_J[update_index][0],o.index_for_J[update_index][1],o.index_for_J[update_index][2],o.series_for_x[update_index]
